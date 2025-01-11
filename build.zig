@@ -5,14 +5,7 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addSharedLibrary(.{
-        .name = "dutils",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    b.installArtifact(lib);
+    _ = b.addModule("string", .{ .root_source_file = b.path("main.zig") });
 
     const unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
