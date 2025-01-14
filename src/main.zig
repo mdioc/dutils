@@ -20,12 +20,16 @@ pub const StringSplit = struct {
 
     pub fn toString(self: StringSplit) !String {
         var string = try String.init(self.allocator, "");
-        try string.concat("[ ");
-        for (self.list.items) |item| {
-            try string.concat(item.buffer);
-            try string.concat(", ");
+        try string.concat("[ \"");
+        for (0.., self.list.items) |index, item| {
+            if (index != self.list.items.len - 1) {
+                try string.concat(item.buffer);
+                try string.concat("\", \"");
+            } else {
+                try string.concat(item.buffer);
+            }
         }
-        try string.concat(" ]");
+        try string.concat("\" ]\n");
         return string;
     }
 };
@@ -43,6 +47,10 @@ pub const String = struct {
         };
         @memcpy(newString.buffer, value);
         return newString;
+    }
+
+    pub fn length(self: String) usize {
+        self.buffer.len;
     }
 
     pub fn concat(self: *String, value: []const u8) !void {
@@ -77,22 +85,77 @@ pub const String = struct {
         return results;
     }
 
-    pub fn deinit(self: String) void {
+    pub fn deinit(self: *String) void {
         self.allocator.free(self.buffer);
     }
 
-    pub fn append(self: String, value: []const u8) String {
-        _ = value;
-        return self;
+    fn isWhitespace(self: String, index: usize) bool {
+        return switch (self.buffer[index]) {
+            '\n' => true,
+            '\t' => true,
+            ' ' => true,
+            else => false,
+        };
+    }
+
+    pub fn trimRight(self: *String) !void {
+        var charIdx: usize = self.buffer.len - 1;
+        while (charIdx >= 0) : (charIdx -= 1) {
+            if (!isWhitespace(self.*, charIdx)) {
+                const newBuffer = try self.allocator.alloc(u8, charIdx + 1);
+                for (0..charIdx + 1) |index| {
+                    newBuffer[index] = self.buffer[index];
+                }
+                self.allocator.free(self.buffer);
+                self.buffer = newBuffer;
+                return;
+            }
+        }
+    }
+
+    pub fn trimLeft(self: *String) !void {
+        for (0..self.buffer.len) |charIdx| {
+            if (!isWhitespace(self.*, charIdx)) {
+                const newBuffer = try self.allocator.alloc(u8, self.buffer.len - (charIdx));
+                for (charIdx..self.buffer.len) |index| {
+                    newBuffer[index - charIdx] = self.buffer[index];
+                }
+                self.allocator.free(self.buffer);
+                self.buffer = newBuffer;
+                return;
+            }
+        }
+    }
+
+    pub fn equals(self: String, other: String) bool {
+        return std.mem.eql(u8, self.buffer, other.buffer);
     }
 };
 
 const expect = std.testing.expect;
-test "test_concat" {
+test "concat" {
     var s = try String.init(std.testing.allocator, "ab;cd");
     defer s.deinit();
     try s.concat(";ef");
-    const result = try String.init(std.testing.allocator, "ab;cd;ef");
+    var result = try String.init(std.testing.allocator, "ab;cd;ef");
     defer result.deinit();
-    try expect(std.mem.eql(u8, s.buffer, result.buffer));
+    try expect(s.equals(result));
+}
+
+test "trimRight" {
+    var s = try String.init(std.testing.allocator, "abcd\n  ");
+    defer s.deinit();
+    try s.trimRight();
+    var result = try String.init(std.testing.allocator, "abcd");
+    defer result.deinit();
+    try expect(s.equals(result));
+}
+
+test "trimLeft" {
+    var s = try String.init(std.testing.allocator, "\t\tabcd");
+    defer s.deinit();
+    try s.trimLeft();
+    var result = try String.init(std.testing.allocator, "abcd");
+    defer result.deinit();
+    try expect(s.equals(result));
 }
