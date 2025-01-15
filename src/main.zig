@@ -34,16 +34,48 @@ pub const StringSplit = struct {
     }
 };
 
+pub const StringFind = struct {
+    list: std.ArrayList(String),
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) StringFind {
+        return StringFind{
+            .list = std.ArrayList(String).init(allocator),
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: StringFind) void {
+        for (self.list.items) |item| {
+            item.deinit();
+        }
+        self.list.deinit();
+    }
+
+    pub fn toString(self: StringFind) !String {
+        var string = try String.init(self.allocator, "");
+        try string.concat("[ \"");
+        for (0.., self.list.items) |index, item| {
+            if (index != self.list.items.len - 1) {
+                try string.concat(item.buffer);
+                try string.concat("\", \"");
+            } else {
+                try string.concat(item.buffer);
+            }
+        }
+        try string.concat("\" ]\n");
+        return string;
+    }
+};
+
 pub const String = struct {
     buffer: []u8,
     allocator: std.mem.Allocator,
-    length: usize,
 
     pub fn init(allocator: std.mem.Allocator, value: []const u8) !String {
         const newString = String{
             .buffer = try allocator.alloc(u8, value.len),
             .allocator = allocator,
-            .length = value.len,
         };
         @memcpy(newString.buffer, value);
         return newString;
@@ -129,6 +161,38 @@ pub const String = struct {
 
     pub fn equals(self: String, other: String) bool {
         return std.mem.eql(u8, self.buffer, other.buffer);
+    }
+
+    pub fn contains(self: String, text: []const u8) bool {
+        var doesContain = false;
+        for (0.., self.buffer) |index, item| {
+            if (item == text[0]) {
+                if (std.mem.eql(u8, self.buffer[index .. index + text.len], text)) {
+                    doesContain = true;
+                }
+            }
+        }
+        return doesContain;
+    }
+
+    pub fn find(self: String, text: []const u8) !StringFind {
+        var foundItems = StringFind.init(self.allocator);
+        if (self.contains(text)) {
+            for (0.., self.buffer) |index, item| {
+                if (item == text[0]) {
+                    if (std.mem.eql(u8, self.buffer[index .. index + text.len], text)) {
+                        const stringItem = try init(self.allocator, text);
+                        try foundItems.list.append(stringItem);
+                    }
+                }
+            }
+        }
+        return foundItems;
+    }
+
+    pub fn countOccurrences(self: String, text: []const u8) u32 {
+        const foundItems = try self.find(text);
+        return @as(u32, foundItems.list.items.len);
     }
 };
 
