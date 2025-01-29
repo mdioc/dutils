@@ -99,8 +99,8 @@ pub const String = struct {
         self.buffer = newBuffer;
     }
 
-    pub fn split(self: String, onChar: u8) !StringSplit {
-        var results = StringSplit.init(self.allocator);
+    pub fn split(self: String, onChar: u8, allocator: std.mem.Allocator) !StringSplit {
+        var results = StringSplit.init(allocator);
         var splitStart: usize = 0;
         for (0.., self.buffer) |idx, element| {
             if (element == onChar) {
@@ -117,7 +117,7 @@ pub const String = struct {
         return results;
     }
 
-    pub fn deinit(self: *String) void {
+    pub fn deinit(self: String) void {
         self.allocator.free(self.buffer);
     }
 
@@ -190,9 +190,17 @@ pub const String = struct {
         return foundItems;
     }
 
-    pub fn countOccurrences(self: String, text: []const u8) u32 {
-        const foundItems = try self.find(text);
-        return @as(u32, foundItems.list.items.len);
+    pub fn countOccurrences(self: String, text: []const u8) !usize {
+        var foundItems = try self.find(text);
+        const count = foundItems.list.items.len;
+        foundItems.deinit();
+        return count;
+    }
+
+    pub fn uppercase(self: *String) void {
+        for (0..self.buffer.len) |index| {
+            self.buffer[index] = std.ascii.toUpper(self.buffer[index]);
+        }
     }
 };
 
@@ -204,6 +212,20 @@ test "concat" {
     var result = try String.init(std.testing.allocator, "ab;cd;ef");
     defer result.deinit();
     try expect(s.equals(result));
+}
+
+test "split" {
+    var s = try String.init(std.testing.allocator, "ab;cd");
+    defer s.deinit();
+    const split = try s.split(';', std.testing.allocator);
+    defer split.deinit();
+    var ss = StringSplit.init(std.testing.allocator);
+    defer ss.deinit();
+    try ss.list.append(try String.init(std.testing.allocator, "ab"));
+    try ss.list.append(try String.init(std.testing.allocator, "cd"));
+    for (0.., split.list.items) |index, item| {
+        try expect(ss.list.items[index].equals(item));
+    }
 }
 
 test "trimRight" {
@@ -222,4 +244,25 @@ test "trimLeft" {
     var result = try String.init(std.testing.allocator, "abcd");
     defer result.deinit();
     try expect(s.equals(result));
+}
+
+test "contains" {
+    var s = try String.init(std.testing.allocator, "\t\tabcd");
+    defer s.deinit();
+    try expect(s.contains("abc"));
+}
+
+test "countOccurrences" {
+    var s = try String.init(std.testing.allocator, "\t\tabad");
+    defer s.deinit();
+    try expect(try s.countOccurrences("a") == 2);
+}
+
+test "uppercase" {
+    var s = try String.init(std.testing.allocator, "something");
+    defer s.deinit();
+    var u = try String.init(std.testing.allocator, "SOMETHING");
+    defer u.deinit();
+    s.uppercase();
+    try expect(s.equals(u));
 }
